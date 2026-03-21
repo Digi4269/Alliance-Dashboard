@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banner of Death - Alliance Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<!-- ========== TOP BAR ========== -->
+<header class="header">
+    <div class="header-top">
+        <h1>&#127984; Banner of Death</h1>
+        <div class="header-meta">
+            <span id="meta-members">&#128101; {{ stats.total_members }} Members</span>
+            <span id="meta-updated">&#128339; {{ last_updated }}</span>
+            <span>Auto-refresh: 5 min</span>
+        </div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="label">Total Members</div>
+            <div class="value" id="stat-total">{{ stats.total_members }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Average Might</div>
+            <div class="value" id="stat-avg-might">{{ stats.avg_might|fmt }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Maximum Might</div>
+            <div class="value" id="stat-max-might">{{ stats.max_might|fmt }}</div>
+            <div class="sub" id="stat-max-player">{{ stats.max_might_player }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Cumulative Might</div>
+            <div class="value" id="stat-cum-might">{{ stats.cum_might|fmt }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Average Honor</div>
+            <div class="value" id="stat-avg-honor">{{ stats.avg_honor|fmt }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Cumulative Loot</div>
+            <div class="value" id="stat-cum-loot">{{ stats.cum_loot|fmt }}</div>
+            <div class="sub">Weekly plundering</div>
+        </div>
+    </div>
+</header>
+
+<!-- ========== MAIN LAYOUT ========== -->
+<div class="layout">
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="main-content">
+
+        <!-- Tab bar -->
+        <div class="tab-bar">
+            <button class="tab active" data-tab="members-tab" onclick="switchTab(this)">Members</button>
+            <button class="tab" data-tab="events-tab" onclick="switchTab(this)">Event Scores</button>
+            <button class="tab" data-tab="discord-tab" onclick="switchTab(this)">Discord</button>
+        </div>
+
+        <!-- Members Tab -->
+        <div class="tab-panel active" id="members-tab">
+            <div class="search-wrap">
+                <input type="text" id="member-search" placeholder="Search members..." oninput="filterMembers()">
+            </div>
+            <div class="table-wrap">
+                <table id="members-table">
+                    <thead>
+                        <tr>
+                            <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="name" data-type="str">Name <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="birded" data-type="str">Birded <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="level" data-type="num">Level <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="legendary_level" data-type="num">Legendary <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="might" data-type="num">Might <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="loot" data-type="num">Loot <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="honor" data-type="num">Honor <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="glory" data-type="num">Glory <span class="sort-arrow">&#9650;</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="members-body">
+                        {% for m in members %}
+                        <tr>
+                            <td class="num">{{ loop.index }}</td>
+                            <td>{{ m.player_name or '' }}</td>
+                            <td class="center">{% if m.birded == 1 %}<span class="status-birded">&#x1F426;</span>{% else %}-{% endif %}</td>
+                            <td class="num">{{ m.level or 0 }}</td>
+                            <td class="num">{{ m.legendary_level or 0 }}</td>
+                            <td class="num" data-raw="{{ m.might_current or 0 }}">{{ (m.might_current or 0)|fmt }}</td>
+                            <td class="num" data-raw="{{ m.loot_current or 0 }}">{{ (m.loot_current or 0)|fmt }}</td>
+                            <td class="num" data-raw="{{ m.honor or 0 }}">{{ (m.honor or 0)|fmt }}</td>
+                            <td class="num" data-raw="{{ m.current_fame or 0 }}">{{ (m.current_fame or 0)|fmt }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Events Tab -->
+        <div class="tab-panel" id="events-tab">
+            {% if event_scores_loading %}
+            <div class="loading-placeholder" id="event-loading">
+                <div class="spinner"></div>
+                <div>Fetching event scores... This may take up to 30 seconds.</div>
+            </div>
+            {% elif event_scores %}
+            <div class="search-wrap">
+                <input type="text" id="event-search" placeholder="Search players..." oninput="filterEvents()">
+            </div>
+            <div class="table-wrap">
+                <table id="events-table">
+                    <thead>
+                        <tr>
+                            <th data-col="name" data-type="str">Name <span class="sort-arrow">&#9650;</span></th>
+                            {% for ename in event_names %}
+                            <th data-col="{{ ename }}" data-type="num">{{ ename }} <span class="sort-arrow">&#9650;</span></th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody id="events-body">
+                        {% for row in event_scores %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            {% for ename in event_names %}
+                            {% set val = row.get(ename, None) %}
+                            <td class="num" data-raw="{{ val if val is not none else 0 }}">{{ val|fmt if val else '-' }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="loading-placeholder" id="event-loading">
+                <div class="spinner"></div>
+                <div>Fetching event scores... This may take up to 30 seconds.</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Discord Tab -->
+        <div class="tab-panel" id="discord-tab">
+            <div class="discord-status-bar">
+                <span class="discord-status {{ 'online' if discord_bot_ready else 'offline' }}">
+                    &#9679; Bot {{ 'Online' if discord_bot_ready else 'Offline' }}
+                </span>
+                <span class="discord-sync-time">Last sync: {{ discord_last_sync }}</span>
+            </div>
+            <div class="search-wrap">
+                <input type="text" id="discord-search" placeholder="Search Discord members..." oninput="filterDiscord()">
+            </div>
+            <div class="table-wrap">
+                <table id="discord-table">
+                    <thead>
+                        <tr>
+                            <th data-col="discord_name" data-type="str">Discord Name <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="ingame_name" data-type="str">Ingame Name <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="nickname" data-type="str">Nickname <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="role" data-type="str">Role <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="status" data-type="str">Status <span class="sort-arrow">&#9650;</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="discord-body">
+                        {% if discord_members %}
+                        {% for dm in discord_members %}
+                        <tr>
+                            <td>{{ dm.discord_name }}</td>
+                            <td>{{ dm.ingame_name or '-' }}</td>
+                            <td>{{ dm.nickname or '-' }}</td>
+                            <td class="center">{% if dm.has_role %}&#x2705;{% else %}&#x274C;{% endif %}</td>
+                            <td class="center">
+                                {% if dm.status == 'in_alliance' %}&#x2705; In Alliance
+                                {% elif dm.status == 'not_found' %}&#x26A0;&#xFE0F; Not found
+                                {% elif dm.status == 'left' %}&#x274C; Left
+                                {% elif dm.status == 'birded' %}&#x1F426; Birded
+                                {% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr><td colspan="5" class="center" style="padding:24px;color:var(--text-muted);">
+                            {% if discord_bot_ready %}No Discord member data yet. Waiting for first sync...{% else %}Discord bot is not connected.{% endif %}
+                        </td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar">
+
+        <!-- Discord Log -->
+        <div class="sidebar-section">
+            <h2 class="sidebar-title">&#x1F916; Discord Log</h2>
+            {% if discord_activity %}
+            <div class="activity-list" id="discord-log-list">
+                {% for entry in discord_activity %}
+                <div class="activity-item {{ 'join' if entry.action in ('role_added', 'auto_linked') else ('leave' if entry.action == 'role_removed' else '') }}">
+                    <span class="dot {{ 'green' if entry.action in ('role_added', 'auto_linked') else ('red' if entry.action == 'role_removed' else 'blue' if entry.action == 'nick_changed' else 'yellow') }}"></span>
+                    <div class="activity-body">
+                        <div class="msg">
+                            <span class="player">{{ entry.discord_user }}</span>
+                            <span class="action">
+                                {% if entry.action == 'role_added' %}got Member role
+                                {% elif entry.action == 'role_removed' %}lost Member role
+                                {% elif entry.action == 'nick_changed' %}nickname changed
+                                {% elif entry.action == 'auto_linked' %}auto-linked
+                                {% elif entry.action == 'warning' %}warning
+                                {% else %}{{ entry.action }}{% endif %}
+                            </span>
+                        </div>
+                        <div class="detail">{{ entry.detail }}</div>
+                        <div class="date">{{ entry.timestamp }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No Discord bot activity yet</div>
+            {% endif %}
+        </div>
+
+        <!-- Activity Log -->
+        <div class="sidebar-section">
+            <h2 class="sidebar-title">Activity Log</h2>
+            {% if activity %}
+            <div class="activity-list" id="activity-list">
+                {% for item in activity %}
+                {% set new_aid = item.get('new_alliance_id', '') | string %}
+                {% set old_aid = item.get('old_alliance_id', '') | string %}
+                {% set is_join = new_aid.endswith('177') %}
+                <div class="activity-item {{ 'join' if is_join else 'leave' }}">
+                    <span class="dot {{ 'green' if is_join else 'red' }}"></span>
+                    <div class="activity-body">
+                        <div class="msg">
+                            <span class="player">{{ item.get('player_name', '???') }}</span>
+                            <span class="action">{{ 'joined' if is_join else 'left' }}</span>
+                        </div>
+                        <div class="date">{{ item.get('created_at', item.get('date', item.get('timestamp', ''))) }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No recent activity</div>
+            {% endif %}
+        </div>
+
+        <!-- Name Changes -->
+        <div class="sidebar-section">
+            <h2 class="sidebar-title">Name Changes</h2>
+            {% if renames %}
+            <div class="rename-list" id="rename-list">
+                {% for r in renames %}
+                <div class="rename-item">
+                    <div class="rename-names">
+                        <span class="old-name">{{ r.get('old_player_name', r.get('oldName', r.get('old_name', '?'))) }}</span>
+                        <span class="arrow">&#10132;</span>
+                        <span class="new-name">{{ r.get('new_player_name', r.get('newName', r.get('new_name', '?'))) }}</span>
+                    </div>
+                    <div class="date">{{ r.get('date', r.get('timestamp', '')) }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">No recent name changes</div>
+            {% endif %}
+        </div>
+
+    </aside>
+
+</div>
+
+<!-- ========== JAVASCRIPT ========== -->
+<script>
+(function() {
+    // ---- Number formatting with dots (European) ----
+    function fmtNum(n) {
+        if (n === null || n === undefined || n === '' || n === '-') return '-';
+        n = parseInt(n, 10);
+        if (isNaN(n)) return '-';
+        var neg = n < 0;
+        var s = Math.abs(n).toString();
+        var result = '';
+        for (var i = s.length - 1, c = 0; i >= 0; i--, c++) {
+            if (c > 0 && c % 3 === 0) result = '.' + result;
+            result = s[i] + result;
+        }
+        return neg ? '-' + result : result;
+    }
+
+    // ---- Tab switching ----
+    window.switchTab = function(btn) {
+        var tabId = btn.getAttribute('data-tab');
+        // Deactivate all tabs and panels
+        document.querySelectorAll('.tab-bar .tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+        // Activate clicked
+        btn.classList.add('active');
+        var panel = document.getElementById(tabId);
+        if (panel) panel.classList.add('active');
+    };
+
+    // ---- Table sorting ----
+    function makeSortable(tableId) {
+        var table = document.getElementById(tableId);
+        if (!table) return;
+        var headers = table.querySelectorAll('thead th');
+        headers.forEach(function(th, colIndex) {
+            th.addEventListener('click', function() {
+                var tbody = table.querySelector('tbody');
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var type = th.getAttribute('data-type') || 'str';
+                var asc = !th.classList.contains('sort-asc');
+
+                headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+                th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+                rows.sort(function(a, b) {
+                    var cellA = a.children[colIndex];
+                    var cellB = b.children[colIndex];
+                    var vA, vB;
+                    if (type === 'num') {
+                        vA = parseFloat((cellA.getAttribute('data-raw') || cellA.textContent).replace(/\./g, '')) || 0;
+                        vB = parseFloat((cellB.getAttribute('data-raw') || cellB.textContent).replace(/\./g, '')) || 0;
+                    } else {
+                        vA = cellA.textContent.toLowerCase();
+                        vB = cellB.textContent.toLowerCase();
+                    }
+                    if (vA < vB) return asc ? -1 : 1;
+                    if (vA > vB) return asc ? 1 : -1;
+                    return 0;
+                });
+
+                rows.forEach(function(row) { tbody.appendChild(row); });
+            });
+        });
+    }
+
+    makeSortable('members-table');
+    makeSortable('events-table');
+    makeSortable('discord-table');
+
+    // ---- Search / filter ----
+    window.filterMembers = function() {
+        var query = document.getElementById('member-search').value.toLowerCase();
+        var rows = document.querySelectorAll('#members-body tr');
+        rows.forEach(function(row) {
+            var name = row.children[1] ? row.children[1].textContent.toLowerCase() : '';
+            row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+        });
+    };
+
+    window.filterEvents = function() {
+        var input = document.getElementById('event-search');
+        if (!input) return;
+        var query = input.value.toLowerCase();
+        var rows = document.querySelectorAll('#events-body tr');
+        rows.forEach(function(row) {
+            var name = row.children[0] ? row.children[0].textContent.toLowerCase() : '';
+            row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+        });
+    };
+
+    window.filterDiscord = function() {
+        var input = document.getElementById('discord-search');
+        if (!input) return;
+        var query = input.value.toLowerCase();
+        var rows = document.querySelectorAll('#discord-body tr');
+        rows.forEach(function(row) {
+            var text = row.textContent.toLowerCase();
+            row.style.display = text.indexOf(query) !== -1 ? '' : 'none';
+        });
+    };
+
+    // ---- Auto-refresh every 5 minutes ----
+    var REFRESH_INTERVAL = 5 * 60 * 1000;
+    var ALLIANCE_SUFFIX = '177';
+
+    function formatActivityDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            var d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var h = d.getHours().toString().padStart(2, '0');
+            var min = d.getMinutes().toString().padStart(2, '0');
+            return months[d.getMonth()] + ' ' + d.getDate() + ', ' + h + ':' + min;
+        } catch(e) { return dateStr; }
+    }
+
+    function autoRefresh() {
+        fetch('/api/refresh')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Update stats
+                if (data.stats) {
+                    var s = data.stats;
+                    setText('stat-total', s.total_members);
+                    setText('stat-avg-might', s.avg_might);
+                    setText('stat-max-might', s.max_might);
+                    setText('stat-max-player', s.max_might_player);
+                    setText('stat-cum-might', s.cum_might);
+                    setText('stat-avg-honor', s.avg_honor);
+                    setText('stat-cum-loot', s.cum_loot);
+                }
+                if (data.last_updated) {
+                    var metaUp = document.getElementById('meta-updated');
+                    if (metaUp) metaUp.innerHTML = '&#128339; ' + data.last_updated;
+                }
+                if (data.stats) {
+                    var metaMem = document.getElementById('meta-members');
+                    if (metaMem) metaMem.innerHTML = '&#128101; ' + data.stats.total_members + ' Members';
+                }
+
+                // Update members table
+                if (data.members && data.members.length) {
+                    var tbody = document.getElementById('members-body');
+                    if (tbody) {
+                        var html = '';
+                        data.members.forEach(function(m, i) {
+                            var name = m.player_name || m.name || '';
+                            var lvl = m.level || 0;
+                            var leg = m.legendary_level || m.legendaryLevel || 0;
+                            var might = m.might_current || 0;
+                            var loot = m.loot_current || 0;
+                            var honor = m.honor || 0;
+                            var glory = m.current_fame || 0;
+                            var birdHtml = m.birded == 1 ? '<span class="status-birded">\uD83D\uDC26</span>' : '-';
+                            html += '<tr>';
+                            html += '<td class="num">' + (i + 1) + '</td>';
+                            html += '<td>' + escHtml(name) + '</td>';
+                            html += '<td class="center">' + birdHtml + '</td>';
+                            html += '<td class="num">' + lvl + '</td>';
+                            html += '<td class="num">' + leg + '</td>';
+                            html += '<td class="num" data-raw="' + might + '">' + fmtNum(might) + '</td>';
+                            html += '<td class="num" data-raw="' + loot + '">' + fmtNum(loot) + '</td>';
+                            html += '<td class="num" data-raw="' + honor + '">' + fmtNum(honor) + '</td>';
+                            html += '<td class="num" data-raw="' + glory + '">' + fmtNum(glory) + '</td>';
+                            html += '</tr>';
+                        });
+                        tbody.innerHTML = html;
+                    }
+                }
+
+                // Update activity sidebar
+                if (data.activity) {
+                    var actList = document.getElementById('activity-list');
+                    if (actList) {
+                        var ahtml = '';
+                        data.activity.forEach(function(item) {
+                            var newAid = String(item.new_alliance_id || '');
+                            var oldAid = String(item.old_alliance_id || '');
+                            var isJoin = newAid.endsWith(ALLIANCE_SUFFIX);
+                            var cls = isJoin ? 'join' : 'leave';
+                            var dotCls = isJoin ? 'green' : 'red';
+                            var actionText = isJoin ? 'joined' : 'left';
+                            var pname = item.player_name || '???';
+                            var dateStr = item.created_at || item.date || item.timestamp || '';
+                            ahtml += '<div class="activity-item ' + cls + '">';
+                            ahtml += '<span class="dot ' + dotCls + '"></span>';
+                            ahtml += '<div class="activity-body">';
+                            ahtml += '<div class="msg"><span class="player">' + escHtml(pname) + '</span> <span class="action">' + actionText + '</span></div>';
+                            ahtml += '<div class="date">' + formatActivityDate(dateStr) + '</div>';
+                            ahtml += '</div></div>';
+                        });
+                        actList.innerHTML = ahtml;
+                    }
+                }
+
+                // Update renames sidebar
+                if (data.renames) {
+                    var renList = document.getElementById('rename-list');
+                    if (renList) {
+                        var rhtml = '';
+                        data.renames.forEach(function(r) {
+                            var oldN = r.old_player_name || r.oldName || r.old_name || '?';
+                            var newN = r.new_player_name || r.newName || r.new_name || '?';
+                            var dateStr = r.date || r.timestamp || '';
+                            rhtml += '<div class="rename-item">';
+                            rhtml += '<div class="rename-names"><span class="old-name">' + escHtml(oldN) + '</span>';
+                            rhtml += ' <span class="arrow">&#10132;</span> ';
+                            rhtml += '<span class="new-name">' + escHtml(newN) + '</span></div>';
+                            rhtml += '<div class="date">' + formatActivityDate(dateStr) + '</div>';
+                            rhtml += '</div>';
+                        });
+                        renList.innerHTML = rhtml;
+                    }
+                }
+
+                // Reload event scores if they were loading and are now ready
+                if (data.event_scores && !data.event_scores_loading) {
+                    var loadEl = document.getElementById('event-loading');
+                    if (loadEl) {
+                        location.reload();
+                    }
+                }
+            })
+            .catch(function(err) {
+                console.log('Auto-refresh error:', err);
+            });
+
+        // Also refresh Discord data
+        refreshDiscord();
+    }
+
+    function refreshDiscord() {
+        fetch('/api/discord')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Update Discord table
+                if (data.discord_members) {
+                    var tbody = document.getElementById('discord-body');
+                    if (tbody) {
+                        var html = '';
+                        if (data.discord_members.length === 0) {
+                            var msg = data.bot_ready ? 'No Discord member data yet. Waiting for first sync...' : 'Discord bot is not connected.';
+                            html = '<tr><td colspan="5" class="center" style="padding:24px;color:var(--text-muted);">' + msg + '</td></tr>';
+                        } else {
+                            data.discord_members.forEach(function(dm) {
+                                var roleIcon = dm.has_role ? '\u2705' : '\u274C';
+                                var statusText = '-';
+                                if (dm.status === 'in_alliance') statusText = '\u2705 In Alliance';
+                                else if (dm.status === 'not_found') statusText = '\u26A0\uFE0F Not found';
+                                else if (dm.status === 'left') statusText = '\u274C Left';
+                                else if (dm.status === 'birded') statusText = '\uD83D\uDC26 Birded';
+                                html += '<tr>';
+                                html += '<td>' + escHtml(dm.discord_name) + '</td>';
+                                html += '<td>' + escHtml(dm.ingame_name || '-') + '</td>';
+                                html += '<td>' + escHtml(dm.nickname || '-') + '</td>';
+                                html += '<td class="center">' + roleIcon + '</td>';
+                                html += '<td class="center">' + statusText + '</td>';
+                                html += '</tr>';
+                            });
+                        }
+                        tbody.innerHTML = html;
+                    }
+                }
+
+                // Update Discord log sidebar
+                if (data.discord_activity) {
+                    var logList = document.getElementById('discord-log-list');
+                    if (logList) {
+                        var lhtml = '';
+                        data.discord_activity.slice(0, 50).forEach(function(entry) {
+                            var isGreen = entry.action === 'role_added' || entry.action === 'auto_linked';
+                            var isRed = entry.action === 'role_removed';
+                            var isBlue = entry.action === 'nick_changed';
+                            var cls = isGreen ? 'join' : (isRed ? 'leave' : '');
+                            var dotCls = isGreen ? 'green' : (isRed ? 'red' : (isBlue ? 'blue' : 'yellow'));
+                            var actionText = entry.action === 'role_added' ? 'got Member role' :
+                                             entry.action === 'role_removed' ? 'lost Member role' :
+                                             entry.action === 'nick_changed' ? 'nickname changed' :
+                                             entry.action === 'auto_linked' ? 'auto-linked' :
+                                             entry.action === 'warning' ? 'warning' : entry.action;
+                            lhtml += '<div class="activity-item ' + cls + '">';
+                            lhtml += '<span class="dot ' + dotCls + '"></span>';
+                            lhtml += '<div class="activity-body">';
+                            lhtml += '<div class="msg"><span class="player">' + escHtml(entry.discord_user) + '</span> <span class="action">' + actionText + '</span></div>';
+                            lhtml += '<div class="detail">' + escHtml(entry.detail || '') + '</div>';
+                            lhtml += '<div class="date">' + formatActivityDate(entry.timestamp) + '</div>';
+                            lhtml += '</div></div>';
+                        });
+                        logList.innerHTML = lhtml;
+                    }
+                }
+
+                // Update status bar
+                var statusBar = document.querySelector('.discord-status');
+                if (statusBar) {
+                    statusBar.className = 'discord-status ' + (data.bot_ready ? 'online' : 'offline');
+                    statusBar.innerHTML = '&#9679; Bot ' + (data.bot_ready ? 'Online' : 'Offline');
+                }
+                var syncTime = document.querySelector('.discord-sync-time');
+                if (syncTime && data.last_sync) {
+                    syncTime.textContent = 'Last sync: ' + data.last_sync;
+                }
+            })
+            .catch(function(err) {
+                console.log('Discord refresh error:', err);
+            });
+    }
+
+    setInterval(autoRefresh, REFRESH_INTERVAL);
+
+    // If event scores are loading, poll more frequently
+    var eventLoading = document.getElementById('event-loading');
+    if (eventLoading) {
+        var pollId = setInterval(function() {
+            fetch('/api/refresh')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.event_scores && !data.event_scores_loading) {
+                        clearInterval(pollId);
+                        location.reload();
+                    }
+                })
+                .catch(function() {});
+        }, 10000);
+    }
+
+    function setText(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+})();
+</script>
+</body>
+</html>
