@@ -646,6 +646,21 @@ async def do_sync(guild: discord.Guild):
         if links_changed:
             save_links(links)
 
+        # Add alliance members who are NOT on Discord yet
+        matched_ingame = {d["ingame_name"].lower() for d in discord_data if d.get("ingame_name")}
+        for name_lower, name_original in alliance_names.items():
+            if name_lower not in matched_ingame:
+                discord_data.append({
+                    "discord_name": "-",
+                    "discord_id": 0,
+                    "ingame_name": name_original,
+                    "nickname": "-",
+                    "has_role": False,
+                    "in_alliance": True,
+                    "birded": False,
+                    "status": "no_discord",
+                })
+
         # Update shared data for dashboard
         set_discord_members_data(discord_data)
 

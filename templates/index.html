@@ -157,6 +157,7 @@
                 <table id="discord-table">
                     <thead>
                         <tr>
+                            <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="discord_name" data-type="str">Discord Name <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="ingame_name" data-type="str">Ingame Name <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="nickname" data-type="str">Nickname <span class="sort-arrow">&#9650;</span></th>
@@ -168,12 +169,14 @@
                         {% if discord_members %}
                         {% for dm in discord_members %}
                         <tr>
+                            <td class="num">{{ loop.index }}</td>
                             <td>{{ dm.discord_name }}</td>
                             <td>{{ dm.ingame_name or '-' }}</td>
                             <td>{{ dm.nickname or '-' }}</td>
                             <td class="center">{% if dm.has_role %}&#x2705;{% else %}&#x274C;{% endif %}</td>
                             <td class="center">
                                 {% if dm.status == 'in_alliance' %}&#x2705; In Alliance
+                                {% elif dm.status == 'no_discord' %}&#x26A0;&#xFE0F; No Discord
                                 {% elif dm.status == 'not_found' %}&#x26A0;&#xFE0F; Not found
                                 {% elif dm.status == 'left' %}&#x274C; Left
                                 {% elif dm.status == 'birded' %}&#x1F426; Birded
@@ -182,7 +185,7 @@
                         </tr>
                         {% endfor %}
                         {% else %}
-                        <tr><td colspan="5" class="center" style="padding:24px;color:var(--text-muted);">
+                        <tr><td colspan="6" class="center" style="padding:24px;color:var(--text-muted);">
                             {% if discord_bot_ready %}No Discord member data yet. Waiting for first sync...{% else %}Discord bot is not connected.{% endif %}
                         </td></tr>
                         {% endif %}
@@ -522,16 +525,18 @@
                         var html = '';
                         if (data.discord_members.length === 0) {
                             var msg = data.bot_ready ? 'No Discord member data yet. Waiting for first sync...' : 'Discord bot is not connected.';
-                            html = '<tr><td colspan="5" class="center" style="padding:24px;color:var(--text-muted);">' + msg + '</td></tr>';
+                            html = '<tr><td colspan="6" class="center" style="padding:24px;color:var(--text-muted);">' + msg + '</td></tr>';
                         } else {
-                            data.discord_members.forEach(function(dm) {
+                            data.discord_members.forEach(function(dm, i) {
                                 var roleIcon = dm.has_role ? '\u2705' : '\u274C';
                                 var statusText = '-';
                                 if (dm.status === 'in_alliance') statusText = '\u2705 In Alliance';
+                                else if (dm.status === 'no_discord') statusText = '\u26A0\uFE0F No Discord';
                                 else if (dm.status === 'not_found') statusText = '\u26A0\uFE0F Not found';
                                 else if (dm.status === 'left') statusText = '\u274C Left';
                                 else if (dm.status === 'birded') statusText = '\uD83D\uDC26 Birded';
                                 html += '<tr>';
+                                html += '<td class="num">' + (i + 1) + '</td>';
                                 html += '<td>' + escHtml(dm.discord_name) + '</td>';
                                 html += '<td>' + escHtml(dm.ingame_name || '-') + '</td>';
                                 html += '<td>' + escHtml(dm.nickname || '-') + '</td>';
