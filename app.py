@@ -8,13 +8,15 @@ from pathlib import Path
 
 import aiohttp
 import requests
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET", "b0d-alliance-dashboard-secret-key-x7q")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "2492")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -764,6 +766,30 @@ async def status(interaction: discord.Interaction):
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+@app.before_request
+def require_login():
+    allowed = ("login", "static")
+    if request.endpoint not in allowed and not session.get("authenticated"):
+        return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = ""
+    if request.method == "POST":
+        if request.form.get("password") == DASHBOARD_PASSWORD:
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        error = "Incorrect passphrase."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/")
