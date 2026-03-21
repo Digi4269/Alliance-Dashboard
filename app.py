@@ -818,7 +818,12 @@ def index():
     # Event scores
     event_scores, loading = get_event_scores()
 
-    event_names = [name for _, name in EVENTS]
+    all_event_names = [name for _, name in EVENTS]
+    # Only show events that have at least one non-zero score
+    if event_scores:
+        event_names = [en for en in all_event_names if any(row.get(en, 0) for row in event_scores)]
+    else:
+        event_names = all_event_names
 
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 

@@ -115,6 +115,7 @@
                 <table id="events-table">
                     <thead>
                         <tr>
+                            <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="name" data-type="str">Name <span class="sort-arrow">&#9650;</span></th>
                             {% for ename in event_names %}
                             <th data-col="{{ ename }}" data-type="num">{{ ename }} <span class="sort-arrow">&#9650;</span></th>
@@ -124,6 +125,7 @@
                     <tbody id="events-body">
                         {% for row in event_scores %}
                         <tr>
+                            <td class="num">{{ loop.index }}</td>
                             <td>{{ row.name }}</td>
                             {% for ename in event_names %}
                             {% set val = row.get(ename, None) %}
