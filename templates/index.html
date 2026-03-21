@@ -73,6 +73,7 @@
                             <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="name" data-type="str">Name <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="birded" data-type="str">Birded <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="birded_until" data-type="str">Until <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="level" data-type="num">Level <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="legendary_level" data-type="num">Legendary <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="might" data-type="num">Might <span class="sort-arrow">&#9650;</span></th>
@@ -87,6 +88,7 @@
                             <td class="num">{{ loop.index }}</td>
                             <td>{{ m.player_name or '' }}</td>
                             <td class="center">{% if m.birded == 1 %}<span class="status-birded">&#x1F426;</span>{% else %}-{% endif %}</td>
+                            <td class="center" style="font-size:0.8em;">{{ m.birded_until or '-' }}</td>
                             <td class="num">{{ m.level or 0 }}</td>
                             <td class="num">{{ m.legendary_level or 0 }}</td>
                             <td class="num" data-raw="{{ m.might_current or 0 }}">{{ (m.might_current or 0)|fmt }}</td>
@@ -117,6 +119,7 @@
                         <tr>
                             <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="name" data-type="str">Name <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="birded" data-type="str">Birded <span class="sort-arrow">&#9650;</span></th>
                             {% for ename in event_names %}
                             <th data-col="{{ ename }}" data-type="num">{{ ename }} <span class="sort-arrow">&#9650;</span></th>
                             {% endfor %}
@@ -127,6 +130,7 @@
                         <tr>
                             <td class="num">{{ loop.index }}</td>
                             <td>{{ row.name }}</td>
+                            <td class="center">{% if row.birded == 1 %}<span class="status-birded">&#x1F426;</span>{% else %}-{% endif %}</td>
                             {% for ename in event_names %}
                             {% set val = row.get(ename, None) %}
                             <td class="num" data-raw="{{ val if val is not none else 0 }}">{{ val|fmt if val else '-' }}</td>

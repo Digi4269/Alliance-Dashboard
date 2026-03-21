@@ -151,17 +151,26 @@ def fetch_members():
         data = _gge_get(f"/alliances/id/{ALLIANCE_ID}")
         members = data if isinstance(data, list) else data.get("players", data.get("members", data.get("data", [])))
         # Determine birded status from peace_disabled_at
+        from zoneinfo import ZoneInfo
         now = datetime.now(timezone.utc)
+        cet = ZoneInfo("Europe/Berlin")
         for m in members:
             pda = m.get("peace_disabled_at")
             if pda:
                 try:
                     expire = datetime.fromisoformat(pda.replace("Z", "+00:00"))
-                    m["birded"] = 1 if expire > now else 0
+                    if expire > now:
+                        m["birded"] = 1
+                        m["birded_until"] = expire.astimezone(cet).strftime("%d %b %Y %H:%M CET")
+                    else:
+                        m["birded"] = 0
+                        m["birded_until"] = ""
                 except Exception:
                     m["birded"] = 0
+                    m["birded_until"] = ""
             else:
                 m["birded"] = 0
+                m["birded_until"] = ""
         cache_set("members", members)
         return members
     except Exception as e:
@@ -843,6 +852,12 @@ def index():
 
     # Event scores
     event_scores, loading = get_event_scores()
+
+    # Add birded status to event scores by cross-referencing members
+    if event_scores and members:
+        birded_lookup = {(m.get("player_name") or "").lower(): m.get("birded", 0) for m in members}
+        for row in event_scores:
+            row["birded"] = birded_lookup.get(row.get("name", "").lower(), 0)
 
     all_event_names = [name for _, name in EVENTS]
     # Only show events that have at least one non-zero score
