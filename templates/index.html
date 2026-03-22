@@ -165,6 +165,7 @@
                         <tr>
                             <th data-col="idx" data-type="num"># <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="discord_name" data-type="str">Discord Name <span class="sort-arrow">&#9650;</span></th>
+                            <th data-col="discord_id" data-type="str">Discord ID <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="ingame_name" data-type="str">Ingame Name <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="nickname" data-type="str">Nickname <span class="sort-arrow">&#9650;</span></th>
                             <th data-col="role" data-type="str">Role <span class="sort-arrow">&#9650;</span></th>
@@ -177,6 +178,11 @@
                         <tr>
                             <td class="num">{{ loop.index }}</td>
                             <td>{{ dm.discord_name }}</td>
+                            <td class="discord-id-cell" data-ingame="{{ dm.ingame_name or '' }}">
+                                <span class="discord-id-display" title="Click to edit">{{ dm.discord_id if dm.discord_id else '' }}</span>
+                                <input type="text" class="discord-id-input" value="{{ dm.discord_id if dm.discord_id else '' }}" placeholder="Enter Discord ID" style="display:none;">
+                                <button class="discord-id-save" style="display:none;" title="Save">&#x2714;</button>
+                            </td>
                             <td>{{ dm.ingame_name or '-' }}</td>
                             <td>{{ dm.nickname or '-' }}</td>
                             <td class="center">{% if dm.has_role %}&#x2705;{% else %}&#x274C;{% endif %}</td>
@@ -191,7 +197,7 @@
                         </tr>
                         {% endfor %}
                         {% else %}
-                        <tr><td colspan="6" class="center" style="padding:24px;color:var(--text-muted);">
+                        <tr><td colspan="7" class="center" style="padding:24px;color:var(--text-muted);">
                             {% if discord_bot_ready %}No Discord member data yet. Waiting for first sync...{% else %}Discord bot is not connected.{% endif %}
                         </td></tr>
                         {% endif %}
@@ -531,7 +537,7 @@
                         var html = '';
                         if (data.discord_members.length === 0) {
                             var msg = data.bot_ready ? 'No Discord member data yet. Waiting for first sync...' : 'Discord bot is not connected.';
-                            html = '<tr><td colspan="6" class="center" style="padding:24px;color:var(--text-muted);">' + msg + '</td></tr>';
+                            html = '<tr><td colspan="7" class="center" style="padding:24px;color:var(--text-muted);">' + msg + '</td></tr>';
                         } else {
                             data.discord_members.forEach(function(dm, i) {
                                 var roleIcon = dm.has_role ? '\u2705' : '\u274C';
@@ -541,9 +547,16 @@
                                 else if (dm.status === 'not_found') statusText = '\u26A0\uFE0F Not found';
                                 else if (dm.status === 'left') statusText = '\u274C Left';
                                 else if (dm.status === 'birded') statusText = '\uD83D\uDC26 Birded';
+                                var discordId = dm.discord_id || '';
+                                var ingameName = dm.ingame_name || '';
                                 html += '<tr>';
                                 html += '<td class="num">' + (i + 1) + '</td>';
                                 html += '<td>' + escHtml(dm.discord_name) + '</td>';
+                                html += '<td class="discord-id-cell" data-ingame="' + escHtml(ingameName) + '">';
+                                html += '<span class="discord-id-display" title="Click to edit">' + escHtml(String(discordId)) + '</span>';
+                                html += '<input type="text" class="discord-id-input" value="' + escHtml(String(discordId)) + '" placeholder="Enter Discord ID" style="display:none;">';
+                                html += '<button class="discord-id-save" style="display:none;" title="Save">&#x2714;</button>';
+                                html += '</td>';
                                 html += '<td>' + escHtml(dm.ingame_name || '-') + '</td>';
                                 html += '<td>' + escHtml(dm.nickname || '-') + '</td>';
                                 html += '<td class="center">' + roleIcon + '</td>';
@@ -626,6 +639,90 @@
         var d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // ---- Discord ID inline editing ----
+    document.addEventListener('click', function(e) {
+        // Click on display span to start editing
+        if (e.target.classList.contains('discord-id-display')) {
+            var cell = e.target.closest('.discord-id-cell');
+            if (!cell) return;
+            var display = cell.querySelector('.discord-id-display');
+            var input = cell.querySelector('.discord-id-input');
+            var btn = cell.querySelector('.discord-id-save');
+            display.style.display = 'none';
+            input.style.display = '';
+            btn.style.display = '';
+            input.focus();
+            input.select();
+        }
+
+        // Click save button
+        if (e.target.classList.contains('discord-id-save')) {
+            var cell = e.target.closest('.discord-id-cell');
+            if (cell) saveDiscordId(cell);
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.classList.contains('discord-id-input')) {
+            var cell = e.target.closest('.discord-id-cell');
+            if (cell) saveDiscordId(cell);
+        }
+        if (e.key === 'Escape' && e.target.classList.contains('discord-id-input')) {
+            var cell = e.target.closest('.discord-id-cell');
+            if (!cell) return;
+            var display = cell.querySelector('.discord-id-display');
+            var input = cell.querySelector('.discord-id-input');
+            var btn = cell.querySelector('.discord-id-save');
+            input.value = display.textContent;
+            display.style.display = '';
+            input.style.display = 'none';
+            btn.style.display = 'none';
+        }
+    });
+
+    function saveDiscordId(cell) {
+        var ingameName = cell.getAttribute('data-ingame');
+        var input = cell.querySelector('.discord-id-input');
+        var display = cell.querySelector('.discord-id-display');
+        var btn = cell.querySelector('.discord-id-save');
+        var newId = input.value.trim();
+
+        if (!ingameName) {
+            alert('Cannot link: no ingame name for this row.');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        fetch('/api/discord/link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ingame_name: ingameName, discord_id: newId})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                display.textContent = newId || '';
+                display.style.display = '';
+                input.style.display = 'none';
+                btn.style.display = 'none';
+                // Flash green to confirm
+                cell.style.background = 'rgba(0,200,0,0.2)';
+                setTimeout(function() { cell.style.background = ''; }, 1500);
+            }
+        })
+        .catch(function(err) {
+            alert('Failed to save: ' + err);
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '&#x2714;';
+        });
     }
 })();
 </script>

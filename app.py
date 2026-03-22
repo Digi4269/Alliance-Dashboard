@@ -105,6 +105,15 @@ def discord_log_add(action: str, discord_user: str, ingame_name: str, detail: st
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     with _discord_log_lock:
+        # Skip if the most recent entry has the same action, user, and detail
+        if _discord_log:
+            last = _discord_log[0]
+            if (last["action"] == action
+                    and last["discord_user"] == discord_user
+                    and last["detail"] == detail):
+                # Update timestamp of existing entry instead of adding a duplicate
+                _discord_log[0]["timestamp"] = entry["timestamp"]
+                return
         _discord_log.insert(0, entry)
         if len(_discord_log) > 200:
             _discord_log.pop()
@@ -502,6 +511,12 @@ async def do_sync(guild: discord.Guild):
         # Build discord members data for dashboard
         discord_data = []
 
+        # Build reverse lookup: discord_user_id -> ingame_name_lower
+        reverse_links = {}
+        for link_name, link_ids in links.items():
+            for uid in link_ids:
+                reverse_links[uid] = link_name
+
         # Process all guild members
         for dm in guild.members:
             if dm.bot:
@@ -649,8 +664,26 @@ async def do_sync(guild: discord.Guild):
                         discord_log_add("warning", discord_username, effective_name,
                                         "Could not add role (Forbidden)")
                 else:
-                    # No role, not in alliance — skip entirely
-                    continue
+                    # No role, not in alliance by name — check manual links
+                    linked_name = reverse_links.get(dm.id)
+                    if linked_name and linked_name in alliance_names:
+                        correct_name = alliance_names[linked_name]
+                        try:
+                            await dm.add_roles(member_role)
+                            await dm.edit(nick=correct_name)
+                            discord_log_add("role_added", discord_username, correct_name,
+                                            f"Manually linked — assigned role and set nickname to '{correct_name}'")
+                            member_info["has_role"] = True
+                            member_info["ingame_name"] = correct_name
+                            member_info["nickname"] = correct_name
+                            member_info["in_alliance"] = True
+                            member_info["status"] = "in_alliance"
+                        except discord.Forbidden:
+                            discord_log_add("warning", discord_username, correct_name,
+                                            "Could not assign role/nickname (Forbidden)")
+                    else:
+                        # No match, no link — skip entirely
+                        continue
 
             discord_data.append(member_info)
 
@@ -949,6 +982,53 @@ def api_discord():
         "bot_ready": _bot_ready,
         "last_sync": _last_sync_time,
     })
+
+
+@app.route("/api/discord/link", methods=["POST"])
+def api_discord_link():
+    """Manually link a Discord user ID to an ingame name."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    ingame_name = (data.get("ingame_name") or "").strip()
+    discord_id_str = (data.get("discord_id") or "").strip()
+
+    if not ingame_name:
+        return jsonify({"error": "Missing ingame_name"}), 400
+
+    links = load_links()
+    key = ingame_name.lower()
+
+    if not discord_id_str:
+        # Unlink: remove all links for this ingame name
+        if key in links:
+            del links[key]
+            save_links(links)
+            discord_log_add("warning", "Dashboard", ingame_name,
+                            f"Manual link removed for '{ingame_name}'")
+        return jsonify({"ok": True, "action": "unlinked"})
+
+    try:
+        discord_id_int = int(discord_id_str)
+    except ValueError:
+        return jsonify({"error": "Invalid discord_id — must be a number"}), 400
+
+    # Save the link
+    if key not in links:
+        links[key] = []
+    if discord_id_int not in links[key]:
+        links[key].append(discord_id_int)
+    save_links(links)
+
+    discord_log_add("auto_linked", "Dashboard", ingame_name,
+                    f"Manually linked Discord ID {discord_id_int} to '{ingame_name}'")
+
+    # Trigger a sync so role + nickname get applied
+    if _bot_guild and bot.loop:
+        asyncio.run_coroutine_threadsafe(do_sync(_bot_guild), bot.loop)
+
+    return jsonify({"ok": True, "action": "linked", "discord_id": discord_id_int})
 
 
 # ---------------------------------------------------------------------------
