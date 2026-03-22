@@ -721,6 +721,36 @@ async def do_sync(guild: discord.Guild):
 
 
 @bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    """Detect when the Member role is manually removed and clear the link."""
+    if before.bot or _sync_running:
+        return
+
+    # Find the Member role
+    member_role = discord.utils.get(after.guild.roles, name=ALLIANCE_ROLE_NAME)
+    if not member_role:
+        return
+
+    # Check if Member role was removed
+    had_role = member_role in before.roles
+    has_role = member_role in after.roles
+    if had_role and not has_role:
+        # Role was removed — clear link so bot doesn't re-add it
+        links = load_links()
+        links_changed = False
+        for ingame_name, id_list in list(links.items()):
+            if after.id in id_list:
+                id_list.remove(after.id)
+                if not id_list:
+                    del links[ingame_name]
+                links_changed = True
+                discord_log_add("role_removed", str(after), ingame_name,
+                                f"Role manually removed — link cleared for '{ingame_name}'")
+        if links_changed:
+            save_links(links)
+
+
+@bot.event
 async def on_ready():
     global _bot_ready, _bot_guild, GUILD_ID
 
